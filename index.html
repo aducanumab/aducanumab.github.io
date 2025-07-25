@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <title>Secure Interactive Map</title>
+  <meta charset="UTF-8">
+  <title>My KML Map</title>
   <style>
     html, body, #map { height: 100%; margin: 0; padding: 0; }
   </style>
@@ -13,26 +14,40 @@
     let map;
 
     function initMap() {
-      const mapCenter = { lat: 37.5665, lng: 126.9780 };
+      const mapCenter = { lat: 37.5665, lng: 126.9780 }; // 초기 중심 좌표
       map = new google.maps.Map(document.getElementById("map"), {
-        zoom: 14,
+        zoom: 12, // 초기 줌 레벨
         center: mapCenter,
       });
+
+      // --- KML 레이어 추가 부분 ---
+      // 1. GitHub에 업로드한 KML 파일의 전체 주소를 지정합니다.
+      // '본인ID'와 'map_data.kml' 부분은 실제 값으로 변경해야 합니다.
+      const kmlUrl = 'https://본인ID.github.io/map_data.kml';
+
+      // 2. KML 레이어를 생성하여 지도에 추가합니다.
+      const kmlLayer = new google.maps.KmlLayer({
+        url: kmlUrl,
+        map: map,
+        preserveViewport: true // KML 데이터에 맞춰 지도가 멋대로 줌인/아웃되는 것을 방지
+      });
+      // --------------------------
     }
 
     async function loadMap() {
-      // 1. 우리 서버 함수에 요청을 보냅니다.
-      const response = await fetch('/.netlify/functions/get-api-key');
-      const data = await response.json();
-      const apiKey = data.apiKey;
+      // Netlify 함수를 통해 안전하게 API 키를 불러오는 부분 (이전과 동일)
+      try {
+        const response = await fetch('/.netlify/functions/get-api-key');
+        const data = await response.json();
+        const apiKey = data.apiKey;
 
-      // 2. 받아온 API 키를 포함하여 구글맵 스크립트 태그를 동적으로 생성합니다.
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap`;
-      script.async = true;
-
-      // 3. 생성된 스크립트 태그를 HTML 문서에 추가하여 지도를 로드합니다.
-      document.head.appendChild(script);
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap`;
+        script.async = true;
+        document.head.appendChild(script);
+      } catch (error) {
+        console.error('API 키를 불러오는 데 실패했습니다.', error);
+      }
     }
 
     loadMap();
