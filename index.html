@@ -2,10 +2,39 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>My First Map Page</title>
+  <title>My Interactive Map</title>
+  <style>
+    /* 웹페이지의 기본 여백을 없애줍니다. */
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    /* id가 "map"인 요소의 높이를 화면 전체로 설정합니다. */
+    #map {
+      height: 100%;
+    }
+  </style>
 </head>
 <body>
-  <h1>나의 첫 지도 페이지</h1>
-  <p>성공적으로 GitHub Pages가 생성되었습니다!</p>
+  <div id="map"></div>
+
+  <script>
+    // 이 함수는 Google Maps API 스크립트가 모두 로드된 후 자동으로 실행됩니다.
+    function initMap() {
+      // 1. 지도의 초기 중심 좌표를 설정합니다. (예: 서울 시청)
+      const mapCenter = { lat: 37.5665, lng: 126.9780 };
+      
+      // 2. id가 "map"인 div 요소를 찾아 지도를 생성하고 표시합니다.
+      const map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 14,             // 초기 줌 레벨
+        center: mapCenter,    // 초기 중심 좌표
+      });
+    }
+  </script>
+  
+  <script async
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBa85_nh3jZ8gmWQtf0xNXxmZY9VCTVUEw&callback=initMap">
+  </script>
 </body>
 </html>
