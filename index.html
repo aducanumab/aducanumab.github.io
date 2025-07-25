@@ -21,11 +21,15 @@
       });
 
       // --- KML 레이어 추가 부분 ---
+
+      // 매번 다른 값을 가지는 '캐시 버스터' 변수 생성
+      const cacheBuster = new Date().getTime();
+      
       // 1. GitHub에 업로드한 KML 파일의 전체 주소를 지정합니다.
       // '본인ID'와 'map_data.kml' 부분은 실제 값으로 변경해야 합니다.
       // const kmlUrl = 'https://aducanumab.github.io/map_data.kml';
-      const kmlUrl = 'https://raw.githubusercontent.com/aducanumab/aducanumab.github.io/refs/heads/main/map_data.kml';
-      
+      const kmlUrl = `https://raw.githubusercontent.com/aducanumab/aducanumab.github.io/refs/heads/main/map_data.kml?v=${cacheBuster}`;
+
       // 2. KML 레이어를 생성하여 지도에 추가합니다.
       const kmlLayer = new google.maps.KmlLayer({
         url: kmlUrl,
