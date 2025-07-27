@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>My KML Map trial 2</title>
+  <title>click available</title>
   <style>
     html, body, #map { height: 100%; margin: 0; padding: 0; }
   </style>
@@ -37,6 +37,26 @@
         preserveViewport: false // KML 데이터에 맞춰 지도가 멋대로 줌인/아웃되는 것을 방지
       });
       // --------------------------
+
+      // KML 레이어에 'click' 이벤트 리스너를 추가합니다.
+      kmlLayer.addListener('click', (kmlEvent) => {
+        // 1. 클릭된 폴리곤의 정보창(description) HTML 내용을 가져옵니다.
+        const infoWindowContent = kmlEvent.featureData.infoWindowHtml;
+      
+        // 2. 정규식을 사용해 HTML 내용에서 href="..." 안에 있는 URL을 추출합니다.
+        const urlMatch = infoWindowContent.match(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"/i);
+      
+        // 3. 추출된 URL이 있다면, 해당 페이지로 브라우저를 이동시킵니다.
+        if (urlMatch && urlMatch[1]) {
+          const url = urlMatch[1];
+          console.log('페이지 이동:', url); // (디버깅용) 콘솔에 이동할 주소 출력
+          window.location.href = url;
+        } else {
+          console.log('이 폴리곤에는 연결된 URL이 없습니다.'); // (디버깅용)
+        }
+      });
+      // --------------------------
+      
     }
 
     async function loadMap() {
