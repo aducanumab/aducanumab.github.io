@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>Final Interactive Map</title>
+  <title>Final Interactive Map (Debugging)</title>
   <style>
     html, body, #map { height: 100%; margin: 0; padding: 0; }
     .gm-style-iw-c { padding: 0 !important; }
@@ -23,15 +23,11 @@
 
   <script>
     let map;
-    // infoWindow 변수는 바깥에 선언만 해둡니다.
     let infoWindow;
 
     function initMap() {
-      // --- ▼▼▼ 오류 수정 ▼▼▼ ---
-      // Google API가 로드된 것이 보장되는 이 시점에서 infoWindow 객체를 생성합니다.
+      console.log("5. initMap() 시작, 지도 객체 생성");
       infoWindow = new google.maps.InfoWindow();
-      // --- ▲▲▲ 오류 수정 ▲▲▲ ---
-
       const mapCenter = { lat: 37.5665, lng: 126.9780 };
       map = new google.maps.Map(document.getElementById("map"), {
         zoom: 12,
@@ -41,6 +37,7 @@
     }
 
     async function loadAndProcessKml() {
+      console.log("6. KML 처리 함수 loadAndProcessKml() 시작");
       const initialKmlUrl = 'https://raw.githubusercontent.com/aducanumab/aducanumab.github.io/refs/heads/main/map_data.kml';
       
       try {
@@ -58,10 +55,128 @@
         const finalResponse = await fetch(finalKmlUrl);
         if (!finalResponse.ok) throw new Error(`최종 KML 로딩 실패`);
         const finalKmlText = await finalResponse.text();
-        const finalKmlDoc = parser.parseFromString(finalKmlText, "application/xml");
+        console.log("7. 최종 KML 데이터 수신 성공");
 
+        const finalKmlDoc = parser.parseFromString(finalKmlText, "application/xml");
+        const placemarks = finalKmlDoc.getElementsByTagNameNS(kmlNs, 'Placemark');
+        console.log(`8. Placemark 찾기 결과: ${placemarks.length}개 발견`);
+        
+        if (placemarks.length === 0) return;
+
+        // ... (이하 폴리곤 생성 및 이벤트 추가 로직은 동일)
         const styles = {};
         const styleMaps = {};
-        
         const styleMapElements = finalKmlDoc.getElementsByTagNameNS(kmlNs, 'StyleMap');
-        for (let i = 0; i < styleMapElements.
+        for (let i = 0; i < styleMapElements.length; i++) {
+            const styleMap = styleMapElements[i];
+            const mapId = '#' + styleMap.getAttribute('id');
+            const pairs = styleMap.getElementsByTagNameNS(kmlNs, 'Pair');
+            for (let j = 0; j < pairs.length; j++) {
+                const key = pairs[j].getElementsByTagNameNS(kmlNs, 'key')[0]?.textContent;
+                const styleUrl = pairs[j].getElementsByTagNameNS(kmlNs, 'styleUrl')[0]?.textContent;
+                if (key === 'normal') styleMaps[mapId] = styleUrl;
+            }
+        }
+        const styleElements = finalKmlDoc.getElementsByTagNameNS(kmlNs, 'Style');
+        for (let i = 0; i < styleElements.length; i++) {
+          const style = styleElements[i];
+          const styleId = '#' + style.getAttribute('id');
+          const lineStyle = style.getElementsByTagNameNS(kmlNs, 'LineStyle')[0];
+          const polyStyle = style.getElementsByTagNameNS(kmlNs, 'PolyStyle')[0];
+          styles[styleId] = {};
+          if (lineStyle) {
+            const lineColor = lineStyle.getElementsByTagNameNS(kmlNs, 'color')[0]?.textContent;
+            const lineWidth = lineStyle.getElementsByTagNameNS(kmlNs, 'width')[0]?.textContent;
+            if (lineColor) {
+              const c = kmlColorToHex(lineColor);
+              styles[styleId].strokeColor = c.color;
+              styles[styleId].strokeOpacity = c.opacity;
+            }
+            if (lineWidth) styles[styleId].strokeWeight = parseFloat(lineWidth);
+          }
+          if (polyStyle) {
+            const polyColor = polyStyle.getElementsByTagNameNS(kmlNs, 'color')[0]?.textContent;
+            if (polyColor) {
+              const c = kmlColorToHex(polyColor);
+              styles[styleId].fillColor = c.color;
+              styles[styleId].fillOpacity = c.opacity;
+            }
+          }
+        }
+        for (let i = 0; i < placemarks.length; i++) {
+          const placemark = placemarks[i];
+          const name = placemark.getElementsByTagNameNS(kmlNs, 'name')[0]?.textContent || '';
+          const description = placemark.getElementsByTagNameNS(kmlNs, 'description')[0]?.textContent || '';
+          const styleUrl = placemark.getElementsByTagNameNS(kmlNs, 'styleUrl')[0]?.textContent || '';
+          const coordinatesElem = placemark.getElementsByTagNameNS(kmlNs, 'coordinates')[0];
+          if (!coordinatesElem) continue;
+          const coordinatesStr = coordinatesElem.textContent.trim();
+          const path = coordinatesStr.split(/\s+/).map(coordStr => {
+            const [lng, lat] = coordStr.split(',');
+            if (!isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng))) return { lat: parseFloat(lat), lng: parseFloat(lng) };
+          }).filter(p => p);
+          if (path.length === 0) continue;
+          const polygonOptions = { paths: path, map: map, strokeColor: "#4285F4", fillColor: "#4285F4", fillOpacity: 0.35 };
+          const finalStyleUrl = styleMaps[styleUrl] || styleUrl;
+          if (styles[finalStyleUrl]) Object.assign(polygonOptions, styles[finalStyleUrl]);
+          const polygon = new google.maps.Polygon(polygonOptions);
+          const center = getPolygonCenter(path);
+          polygon.addListener('mouseover', () => {
+            const contentString = `<div class="custom-infowindow-content">${name}</div>`;
+            infoWindow.setContent(contentString);
+            infoWindow.setPosition(center);
+            infoWindow.open(map);
+          });
+          polygon.addListener('mouseout', () => { infoWindow.close(); });
+          const urlMatch = description.match(/https?:\/\/[^\s<]+/);
+          if (urlMatch && urlMatch[0]) polygon.addListener('click', () => { window.location.href = urlMatch[0]; });
+        }
+        console.log("9. 폴리곤 및 라벨 생성 완료");
+
+      } catch (error) {
+        console.error('KML 처리 중 오류:', error);
+      }
+    }
+    
+    function getPolygonCenter(path) {
+      const bounds = new google.maps.LatLngBounds();
+      path.forEach(point => bounds.extend(point));
+      return bounds.getCenter();
+    }
+
+    function kmlColorToHex(kmlColor) {
+      const aabbggrr = kmlColor.padStart(8, '0');
+      const alpha = parseInt(aabbggrr.substring(0, 2), 16) / 255.0;
+      const blue = aabbggrr.substring(2, 4);
+      const green = aabbggrr.substring(4, 6);
+      const red = aabbggrr.substring(6, 8);
+      return { color: `#${red}${green}${blue}`, opacity: alpha };
+    }
+
+    async function loadMap() {
+      console.log("1. loadMap() 시작");
+      try {
+        console.log("2. API 키 요청 시작...");
+        const response = await fetch('/.netlify/functions/get-api-key');
+        const data = await response.json();
+        const apiKey = data.apiKey;
+        console.log("3. API 키 수신 성공");
+
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap&loading=async`;
+        script.async = true;
+        // 스크립트 로딩 실패 시 에러를 확인할 수 있도록 onerror 이벤트 추가
+        script.onerror = () => {
+          console.error("4. Google Maps API 스크립트 로딩 실패!");
+          alert("Google Maps API 스크립트를 불러오는 데 실패했습니다. API 키나 네트워크 연결을 확인해 주세요.");
+        };
+        document.head.appendChild(script);
+      } catch (error) {
+        console.error('API 키 로딩 실패:', error);
+      }
+    }
+
+    loadMap();
+  </script>
+</body>
+</html>
