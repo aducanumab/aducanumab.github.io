@@ -22,7 +22,6 @@
       loadAndProcessKml();
     }
 
-    // KML 네트워크 링크를 따라가 최종 데이터를 파싱하는 함수
     async function loadAndProcessKml() {
       const initialKmlUrl = 'https://raw.githubusercontent.com/aducanumab/aducanumab.github.io/refs/heads/main/map_data.kml';
       
@@ -43,16 +42,13 @@
         const finalKmlText = await finalResponse.text();
         const finalKmlDoc = parser.parseFromString(finalKmlText, "application/xml");
 
-        // --- 1. KML에 정의된 스타일 정보 미리 파싱하기 ---
         const styles = {};
         const styleElements = finalKmlDoc.getElementsByTagNameNS(kmlNs, 'Style');
         for (let i = 0; i < styleElements.length; i++) {
           const style = styleElements[i];
           const styleId = '#' + style.getAttribute('id');
-          
           const lineStyle = style.getElementsByTagNameNS(kmlNs, 'LineStyle')[0];
           const polyStyle = style.getElementsByTagNameNS(kmlNs, 'PolyStyle')[0];
-          
           styles[styleId] = {};
           if (lineStyle) {
             const lineColor = lineStyle.getElementsByTagNameNS(kmlNs, 'color')[0]?.textContent;
@@ -80,7 +76,7 @@
         for (let i = 0; i < placemarks.length; i++) {
           const placemark = placemarks[i];
           const name = placemark.getElementsByTagNameNS(kmlNs, 'name')[0]?.textContent || '';
-          const description = placemark.getElementsByTagNameNS(kmlNs, 'description')[0]?.textContent || '';
+          const descriptionHtml = placemark.getElementsByTagNameNS(kmlNs, 'description')[0]?.textContent || '';
           const styleUrl = placemark.getElementsByTagNameNS(kmlNs, 'styleUrl')[0]?.textContent || '';
           const coordinatesElem = placemark.getElementsByTagNameNS(kmlNs, 'coordinates')[0];
           
@@ -96,11 +92,9 @@
 
           if (path.length === 0) continue;
 
-          // --- 2. 파싱한 스타일 정보 또는 기본값으로 폴리곤 생성 ---
           const polygonOptions = {
             paths: path,
             map: map,
-            // 기본 스타일
             strokeColor: "#0000FF",
             strokeOpacity: 0.8,
             strokeWeight: 2,
@@ -108,17 +102,20 @@
             fillOpacity: 0.35
           };
 
-          // KML에 정의된 스타일이 있으면 덮어쓰기
           if (styles[styleUrl]) {
             Object.assign(polygonOptions, styles[styleUrl]);
           }
           
           const polygon = new google.maps.Polygon(polygonOptions);
 
-          // --- 3. Mouseover 및 Click 이벤트 다시 추가 ---
-          polygon.addListener('mouseover', (event) => {
+          // 폴리곤의 중심 좌표를 미리 계산합니다.
+          const center = getPolygonCenter(path);
+
+          // ### 마우스 오버 기능 수정 ###
+          polygon.addListener('mouseover', () => {
             infoWindow.setContent(`<div>${name}</div>`);
-            infoWindow.setPosition(event.latLng);
+            // 정보창의 위치를 마우스 커서가 아닌 폴리곤의 중심점으로 설정합니다.
+            infoWindow.setPosition(center);
             infoWindow.open(map);
           });
 
@@ -126,12 +123,18 @@
             infoWindow.close();
           });
 
-          // Click 이벤트 추가
-          const urlMatch = description.match(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"/i);
-          if (urlMatch && urlMatch[1]) {
-            polygon.addListener('click', () => {
-              window.location.href = urlMatch[1];
-            });
+          // ### 클릭 기능 수정 ###
+          // 설명(description)에 포함된 HTML을 직접 파싱하여 링크(a 태그)를 찾습니다.
+          if (descriptionHtml) {
+            const descDoc = new DOMParser().parseFromString(descriptionHtml, 'text/html');
+            const link = descDoc.querySelector('a'); // a 태그를 찾습니다.
+            
+            // a 태그와 그 안의 href 속성이 존재하면 클릭 이벤트를 추가합니다.
+            if (link && link.href) {
+              polygon.addListener('click', () => {
+                window.location.href = link.href;
+              });
+            }
           }
         }
       } catch (error) {
@@ -140,7 +143,12 @@
       }
     }
     
-    // KML 색상(AABBGGRR)을 CSS 색상(#RRGGBB) 및 투명도로 변환하는 함수
+    function getPolygonCenter(path) {
+      const bounds = new google.maps.LatLngBounds();
+      path.forEach(point => bounds.extend(point));
+      return bounds.getCenter();
+    }
+
     function kmlColorToHex(kmlColor) {
       const aabbggrr = kmlColor.padStart(8, '0');
       const alpha = parseInt(aabbggrr.substring(0, 2), 16) / 255.0;
@@ -153,7 +161,6 @@
       };
     }
 
-    // API 키를 안전하게 불러오는 함수 (이전과 동일)
     async function loadMap() {
       try {
         const response = await fetch('/.netlify/functions/get-api-key');
