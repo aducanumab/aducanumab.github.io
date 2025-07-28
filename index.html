@@ -2,14 +2,9 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>Map with Polygon Labels</title>
+  <title>Map with Polygon Labels (Fixed)</title>
   <style>
-    /* 웹페이지의 기본 여백을 없애고, 지도가 화면을 꽉 채우도록 설정합니다. */
-    html, body, #map {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-    }
+    html, body, #map { height: 100%; margin: 0; padding: 0; }
   </style>
 </head>
 <body>
@@ -18,57 +13,57 @@
   <script>
     let map;
 
-    // Google Maps API 스크립트가 로드된 후 실행될 기본 함수입니다.
     function initMap() {
-      // 1. 지도의 초기 중심 좌표와 줌 레벨을 설정합니다. (예: 서울 시청)
       const mapCenter = { lat: 37.5665, lng: 126.9780 };
       map = new google.maps.Map(document.getElementById("map"), {
         zoom: 12,
         center: mapCenter,
       });
-
-      // 2. KML 파일을 불러와서 처리하는 메인 함수를 호출합니다.
       loadAndProcessKml();
     }
 
-    // KML 파일을 불러오고, 파싱하여 폴리곤과 라벨을 생성하는 비동기 함수
     async function loadAndProcessKml() {
-      // '본인ID' 부분은 실제 GitHub ID로 변경해야 합니다.
       const kmlUrl = 'https://raw.githubusercontent.com/aducanumab/aducanumab.github.io/refs/heads/main/map_data.kml';
       
       try {
-        // 1. fetch API를 사용해 GitHub에 있는 KML 파일을 텍스트로 불러옵니다.
         const response = await fetch(kmlUrl);
         if (!response.ok) {
           throw new Error(`KML 파일을 불러오는 데 실패했습니다: ${response.statusText}`);
         }
         const kmlText = await response.text();
+        console.log("1. KML 파일 로딩 성공"); // 디버깅 로그
 
-        // 2. 불러온 KML 텍스트를 XML 문서로 파싱합니다.
         const parser = new DOMParser();
         const kmlDoc = parser.parseFromString(kmlText, "application/xml");
 
-        // 3. KML 문서 안의 모든 Placemark(도형 데이터 묶음)를 찾습니다.
-        const placemarks = kmlDoc.getElementsByTagName('Placemark');
+        // --- 수정된 부분: getElementsByTagNameNS 사용 ---
+        const kmlNs = 'http://www.opengis.net/kml/2.2'; // KML 네임스페이스 주소
+        const placemarks = kmlDoc.getElementsByTagNameNS(kmlNs, 'Placemark');
+        console.log(`2. Placemark 찾기 결과: ${placemarks.length}개 발견`); // 디버깅 로그
 
-        // 4. 각 Placemark를 순회하며 폴리곤과 라벨을 생성합니다.
+        if (placemarks.length === 0) {
+          alert('KML 파일에서 Placemark(도형) 데이터를 찾지 못했습니다. 파일 형식을 확인해주세요.');
+          return;
+        }
+
         for (let i = 0; i < placemarks.length; i++) {
           const placemark = placemarks[i];
-          const name = placemark.getElementsByTagName('name')[0].textContent;
-          const coordinatesStr = placemark.getElementsByTagName('coordinates')[0].textContent.trim();
+          const name = placemark.getElementsByTagNameNS(kmlNs, 'name')[0].textContent;
+          const coordinatesElem = placemark.getElementsByTagNameNS(kmlNs, 'coordinates')[0];
           
-          // 5. KML의 좌표 텍스트를 구글맵이 이해할 수 있는 좌표 객체 배열로 변환합니다.
+          if (!coordinatesElem) continue; // coordinates 태그가 없는 경우 건너뛰기
+          
+          const coordinatesStr = coordinatesElem.textContent.trim();
+          
           const path = coordinatesStr.split(/\s+/).map(coordStr => {
             const [lng, lat] = coordStr.split(',');
-            // 유효한 좌표값인지 확인
             if (!isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng))) {
               return { lat: parseFloat(lat), lng: parseFloat(lng) };
             }
-          }).filter(p => p); // 유효하지 않은 좌표는 걸러냅니다.
+          }).filter(p => p);
 
-          if (path.length === 0) continue; // 유효한 좌표가 없으면 다음으로 넘어갑니다.
+          if (path.length === 0) continue;
 
-          // 6. 구글맵 폴리곤 객체를 생성하고 지도에 추가합니다.
           const polygon = new google.maps.Polygon({
             paths: path,
             strokeColor: "#FF0000",
@@ -79,10 +74,8 @@
             map: map
           });
 
-          // 7. 폴리곤의 중심점을 계산하여 라벨을 표시할 위치를 정합니다.
           const center = getPolygonCenter(path);
 
-          // 8. 아이콘은 투명하게 하고, 텍스트 라벨만 보이도록 마커를 생성합니다.
           const labelMarker = new google.maps.Marker({
             position: center,
             map: map,
@@ -93,26 +86,25 @@
               fontWeight: 'bold'
             },
             icon: {
-              path: 'M 0,0', // 보이지 않는 점
+              path: 'M 0,0',
               strokeOpacity: 0,
               scale: 0
             }
           });
         }
+        console.log("3. 폴리곤 및 라벨 생성 완료"); // 디버깅 로그
       } catch (error) {
         console.error('KML 데이터를 처리하는 중 오류가 발생했습니다.', error);
-        alert('지도 데이터를 불러오는 데 문제가 발생했습니다. 콘솔을 확인해 주세요.');
+        alert('지도 데이터를 불러오는 데 문제가 발생했습니다. F12를 눌러 콘솔을 확인해 주세요.');
       }
     }
 
-    // 폴리곤의 기하학적 중심 좌표를 계산하는 도우미 함수입니다.
     function getPolygonCenter(path) {
       const bounds = new google.maps.LatLngBounds();
       path.forEach(point => bounds.extend(point));
       return bounds.getCenter();
     }
     
-    // Netlify 서버리스 함수를 통해 API 키를 안전하게 불러오는 함수입니다.
     async function loadMap() {
       try {
         const response = await fetch('/.netlify/functions/get-api-key');
@@ -129,7 +121,6 @@
       }
     }
 
-    // 페이지가 열리면 지도 로딩을 시작합니다.
     loadMap();
   </script>
 </body>
