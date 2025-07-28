@@ -7,7 +7,6 @@
     /* 웹페이지의 기본 여백을 없애고, 지도가 화면을 꽉 채우도록 설정합니다. */
     html, body, #map { height: 100%; margin: 0; padding: 0; }
 
-    /* --- ↓↓↓ 정보창 스타일 추가 ↓↓↓ --- */
     /* Google 지도의 기본 정보창 여백(padding)을 제거합니다. */
     .gm-style-iw-c {
       padding: 0 !important;
@@ -33,7 +32,6 @@
       cursor: pointer;
       font-size: 18px;
     }
-    /* --- ↑↑↑ 여기까지 추가 --- ↑↑↑ */
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,17 +42,22 @@
 
   <script>
     let map;
-    // InfoWindow 객체를 전역 변수로 만들어 닫기 함수에서도 접근할 수 있도록 합니다.
-    const infoWindow = new google.maps.InfoWindow();
+    // infoWindow 변수는 바깥에 선언만 해둡니다.
+    let infoWindow;
 
-    // --- ↓↓↓ 닫기 버튼을 위한 함수 추가 ↓↓↓ ---
     // 커스텀 닫기 버튼(X)을 클릭했을 때 이 함수가 호출됩니다.
     function closeInfoWindow() {
-      infoWindow.close();
+      if (infoWindow) {
+        infoWindow.close();
+      }
     }
-    // --- ↑↑↑ 여기까지 추가 --- ↑↑↑
 
     function initMap() {
+      // --- ↓↓↓ infoWindow 객체 생성을 이 안으로 이동! ↓↓↓ ---
+      // Google API가 로드된 것이 보장되는 이 시점에서 infoWindow 객체를 생성합니다.
+      infoWindow = new google.maps.InfoWindow();
+      // --- ↑↑↑ 여기까지 이동 --- ↑↑↑
+
       const mapCenter = { lat: 37.5665, lng: 126.9780 };
       map = new google.maps.Map(document.getElementById("map"), {
         zoom: 12,
@@ -150,7 +153,6 @@
           const center = getPolygonCenter(path);
 
           polygon.addListener('mouseover', () => {
-            // --- ↓↓↓ 정보창 내용(HTML) 수정 ↓↓↓ ---
             const contentString = `
               <div class="custom-infowindow-content">
                 <span>${name}</span>
@@ -158,7 +160,6 @@
               </div>
             `;
             infoWindow.setContent(contentString);
-            // --- ↑↑↑ 여기까지 수정 --- ↑↑↑
             infoWindow.setPosition(center);
             infoWindow.open(map);
           });
@@ -208,7 +209,7 @@
         script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap&loading=async`;
         script.async = true;
         document.head.appendChild(script);
-      } catch (error) {
+      } catch (error)
         console.error('API 키 로딩 실패:', error);
       }
     }
