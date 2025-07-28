@@ -56,6 +56,32 @@
         }
       });
       // --------------------------
+
+      // --- ↓↓↓ 마우스 오버 기능 추가 ↓↓↓ ---
+      
+      // 1. 재사용할 정보창(InfoWindow) 객체를 미리 하나 생성합니다.
+      const infoWindow = new google.maps.InfoWindow();
+      
+      // 2. KML 레이어에 'mouseover' 이벤트 리스너를 추가합니다.
+      kmlLayer.addListener('mouseover', (kmlEvent) => {
+        // 마우스 커서의 위치와 폴리곤의 정보를 가져옵니다.
+        const latLng = kmlEvent.latLng;
+        const featureData = kmlEvent.featureData;
+      
+        // 정보창의 내용을 폴리곤의 이름으로 설정합니다.
+        infoWindow.setContent(`<div>${featureData.name}</div>`);
+        // 정보창의 위치를 마우스 커서 위치로 설정합니다.
+        infoWindow.setPosition(latLng);
+        // 정보창을 지도에 표시합니다.
+        infoWindow.open(map);
+      });
+      
+      // 3. KML 레이어에 'mouseout' 이벤트 리스너를 추가합니다.
+      kmlLayer.addListener('mouseout', () => {
+        // 마우스가 폴리곤에서 벗어나면 정보창을 닫습니다.
+        infoWindow.close();
+      });
+      // --------------------------
       
     }
 
