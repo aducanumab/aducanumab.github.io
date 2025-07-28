@@ -209,7 +209,7 @@
         script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap&loading=async`;
         script.async = true;
         document.head.appendChild(script);
-      } catch (error)
+      } catch (error) { // <-- 여기에 '{'가 추가되었습니다.
         console.error('API 키 로딩 실패:', error);
       }
     }
