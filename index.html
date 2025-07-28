@@ -74,6 +74,8 @@
         infoWindow.setPosition(latLng);
         // 정보창을 지도에 표시합니다.
         infoWindow.open(map);
+
+        console.log(kmlEvent.featureData);
       });
       
       // 3. KML 레이어에 'mouseout' 이벤트 리스너를 추가합니다.
