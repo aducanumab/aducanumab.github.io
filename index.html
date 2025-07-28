@@ -24,45 +24,69 @@
 
     // KML 네트워크 링크를 따라가 최종 데이터를 파싱하는 함수
     async function loadAndProcessKml() {
-      // 1. 첫 번째 KML 파일 (네트워크 링크만 있는 파일) 주소
       const initialKmlUrl = 'https://raw.githubusercontent.com/aducanumab/aducanumab.github.io/refs/heads/main/map_data.kml';
       
       try {
-        // --- 1단계: '바로가기' 파일(첫 번째 KML) 불러오기 ---
         const initialResponse = await fetch(initialKmlUrl);
-        if (!initialResponse.ok) throw new Error(`초기 KML 로딩 실패: ${initialResponse.statusText}`);
+        if (!initialResponse.ok) throw new Error(`초기 KML 로딩 실패`);
         const initialKmlText = await initialResponse.text();
-
         const parser = new DOMParser();
         const initialKmlDoc = parser.parseFromString(initialKmlText, "application/xml");
-
-        // --- 2단계: 진짜 데이터의 URL 추출하기 ---
         const kmlNs = 'http://www.opengis.net/kml/2.2';
         const hrefElem = initialKmlDoc.getElementsByTagNameNS(kmlNs, 'href')[0];
-        if (!hrefElem) throw new Error('KML 파일에서 NetworkLink href를 찾을 수 없습니다.');
+        if (!hrefElem) throw new Error('NetworkLink href를 찾을 수 없습니다.');
         
-        const finalKmlUrl = hrefElem.textContent; // 진짜 데이터가 있는 최종 URL
+        const finalKmlUrl = hrefElem.textContent;
 
-        // --- 3단계: 진짜 데이터(두 번째 KML) 불러오기 ---
         const finalResponse = await fetch(finalKmlUrl);
-        if (!finalResponse.ok) throw new Error(`최종 KML 로딩 실패: ${finalResponse.statusText}`);
+        if (!finalResponse.ok) throw new Error(`최종 KML 로딩 실패`);
         const finalKmlText = await finalResponse.text();
-
-        // --- 4단계: 최종 데이터를 파싱하여 폴리곤 생성 (이전과 동일) ---
         const finalKmlDoc = parser.parseFromString(finalKmlText, "application/xml");
-        const placemarks = finalKmlDoc.getElementsByTagNameNS(kmlNs, 'Placemark');
+
+        // --- 1. KML에 정의된 스타일 정보 미리 파싱하기 ---
+        const styles = {};
+        const styleElements = finalKmlDoc.getElementsByTagNameNS(kmlNs, 'Style');
+        for (let i = 0; i < styleElements.length; i++) {
+          const style = styleElements[i];
+          const styleId = '#' + style.getAttribute('id');
+          
+          const lineStyle = style.getElementsByTagNameNS(kmlNs, 'LineStyle')[0];
+          const polyStyle = style.getElementsByTagNameNS(kmlNs, 'PolyStyle')[0];
+          
+          styles[styleId] = {};
+          if (lineStyle) {
+            const lineColor = lineStyle.getElementsByTagNameNS(kmlNs, 'color')[0]?.textContent;
+            const lineWidth = lineStyle.getElementsByTagNameNS(kmlNs, 'width')[0]?.textContent;
+            if (lineColor) {
+              const c = kmlColorToHex(lineColor);
+              styles[styleId].strokeColor = c.color;
+              styles[styleId].strokeOpacity = c.opacity;
+            }
+            if (lineWidth) styles[styleId].strokeWeight = parseFloat(lineWidth);
+          }
+          if (polyStyle) {
+            const polyColor = polyStyle.getElementsByTagNameNS(kmlNs, 'color')[0]?.textContent;
+            if (polyColor) {
+              const c = kmlColorToHex(polyColor);
+              styles[styleId].fillColor = c.color;
+              styles[styleId].fillOpacity = c.opacity;
+            }
+          }
+        }
         
+        const placemarks = finalKmlDoc.getElementsByTagNameNS(kmlNs, 'Placemark');
         const infoWindow = new google.maps.InfoWindow();
 
         for (let i = 0; i < placemarks.length; i++) {
           const placemark = placemarks[i];
-          const name = placemark.getElementsByTagNameNS(kmlNs, 'name')[0].textContent;
+          const name = placemark.getElementsByTagNameNS(kmlNs, 'name')[0]?.textContent || '';
+          const description = placemark.getElementsByTagNameNS(kmlNs, 'description')[0]?.textContent || '';
+          const styleUrl = placemark.getElementsByTagNameNS(kmlNs, 'styleUrl')[0]?.textContent || '';
           const coordinatesElem = placemark.getElementsByTagNameNS(kmlNs, 'coordinates')[0];
           
           if (!coordinatesElem) continue;
           
           const coordinatesStr = coordinatesElem.textContent.trim();
-          
           const path = coordinatesStr.split(/\s+/).map(coordStr => {
             const [lng, lat] = coordStr.split(',');
             if (!isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng))) {
@@ -72,14 +96,26 @@
 
           if (path.length === 0) continue;
 
-          const polygon = new google.maps.Polygon({
+          // --- 2. 파싱한 스타일 정보 또는 기본값으로 폴리곤 생성 ---
+          const polygonOptions = {
             paths: path,
-            strokeColor: "#FF0000",
-            fillColor: "#FF0000",
-            fillOpacity: 0.35,
-            map: map
-          });
+            map: map,
+            // 기본 스타일
+            strokeColor: "#0000FF",
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: "#0000FF",
+            fillOpacity: 0.35
+          };
 
+          // KML에 정의된 스타일이 있으면 덮어쓰기
+          if (styles[styleUrl]) {
+            Object.assign(polygonOptions, styles[styleUrl]);
+          }
+          
+          const polygon = new google.maps.Polygon(polygonOptions);
+
+          // --- 3. Mouseover 및 Click 이벤트 다시 추가 ---
           polygon.addListener('mouseover', (event) => {
             infoWindow.setContent(`<div>${name}</div>`);
             infoWindow.setPosition(event.latLng);
@@ -89,11 +125,32 @@
           polygon.addListener('mouseout', () => {
             infoWindow.close();
           });
+
+          // Click 이벤트 추가
+          const urlMatch = description.match(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"/i);
+          if (urlMatch && urlMatch[1]) {
+            polygon.addListener('click', () => {
+              window.location.href = urlMatch[1];
+            });
+          }
         }
       } catch (error) {
         console.error('KML 처리 중 오류:', error);
         alert('지도 데이터를 처리하는 중 문제가 발생했습니다.');
       }
+    }
+    
+    // KML 색상(AABBGGRR)을 CSS 색상(#RRGGBB) 및 투명도로 변환하는 함수
+    function kmlColorToHex(kmlColor) {
+      const aabbggrr = kmlColor.padStart(8, '0');
+      const alpha = parseInt(aabbggrr.substring(0, 2), 16) / 255.0;
+      const blue = aabbggrr.substring(2, 4);
+      const green = aabbggrr.substring(4, 6);
+      const red = aabbggrr.substring(6, 8);
+      return {
+        color: `#${red}${green}${blue}`,
+        opacity: alpha
+      };
     }
 
     // API 키를 안전하게 불러오는 함수 (이전과 동일)
