@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>mouse over console</title>
+  <title>Final Interactive Map</title>
   <style>
     html, body, #map { height: 100%; margin: 0; padding: 0; }
   </style>
@@ -14,94 +14,101 @@
     let map;
 
     function initMap() {
-      const mapCenter = { lat: 37.5665, lng: 126.9780 }; // 초기 중심 좌표
+      const mapCenter = { lat: 37.5665, lng: 126.9780 };
       map = new google.maps.Map(document.getElementById("map"), {
-        zoom: 12, // 초기 줌 레벨
+        zoom: 12,
         center: mapCenter,
       });
-
-      // --- KML 레이어 추가 부분 ---
-
-      // 매번 다른 값을 가지는 '캐시 버스터' 변수 생성
-      const cacheBuster = new Date().getTime();
-      
-      // 1. GitHub에 업로드한 KML 파일의 전체 주소를 지정합니다.
-      // '본인ID'와 'map_data.kml' 부분은 실제 값으로 변경해야 합니다.
-      // const kmlUrl = 'https://aducanumab.github.io/map_data.kml';
-      const kmlUrl = `https://raw.githubusercontent.com/aducanumab/aducanumab.github.io/refs/heads/main/map_data.kml?v=${cacheBuster}`;
-
-      // 2. KML 레이어를 생성하여 지도에 추가합니다.
-      const kmlLayer = new google.maps.KmlLayer({
-        url: kmlUrl,
-        map: map,
-        preserveViewport: false // KML 데이터에 맞춰 지도가 멋대로 줌인/아웃되는 것을 방지
-      });
-      // --------------------------
-
-      // KML 레이어에 'click' 이벤트 리스너를 추가합니다.
-      kmlLayer.addListener('click', (kmlEvent) => {
-        // 1. 클릭된 폴리곤의 정보창(description) HTML 내용을 가져옵니다.
-        const infoWindowContent = kmlEvent.featureData.infoWindowHtml;
-      
-        // 2. 정규식을 사용해 HTML 내용에서 href="..." 안에 있는 URL을 추출합니다.
-        const urlMatch = infoWindowContent.match(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"/i);
-      
-        // 3. 추출된 URL이 있다면, 해당 페이지로 브라우저를 이동시킵니다.
-        if (urlMatch && urlMatch[1]) {
-          const url = urlMatch[1];
-          console.log('페이지 이동:', url); // (디버깅용) 콘솔에 이동할 주소 출력
-          window.location.href = url;
-        } else {
-          console.log('이 폴리곤에는 연결된 URL이 없습니다.'); // (디버깅용)
-        }
-      });
-      // --------------------------
-
-      // --- ↓↓↓ 마우스 오버 기능 추가 ↓↓↓ ---
-      
-      // 1. 재사용할 정보창(InfoWindow) 객체를 미리 하나 생성합니다.
-      const infoWindow = new google.maps.InfoWindow();
-      
-      // 2. KML 레이어에 'mouseover' 이벤트 리스너를 추가합니다.
-      kmlLayer.addListener('mouseover', (kmlEvent) => {
-
-        console.log(kmlEvent.featureData);
-        
-        // 마우스 커서의 위치와 폴리곤의 정보를 가져옵니다.
-        const latLng = kmlEvent.latLng;
-        const featureData = kmlEvent.featureData;
-      
-        // 정보창의 내용을 폴리곤의 이름으로 설정합니다.
-        infoWindow.setContent(`<div>${featureData.name}</div>`);
-        // 정보창의 위치를 마우스 커서 위치로 설정합니다.
-        infoWindow.setPosition(latLng);
-        // 정보창을 지도에 표시합니다.
-        infoWindow.open(map);
-
-      });
-      
-      // 3. KML 레이어에 'mouseout' 이벤트 리스너를 추가합니다.
-      kmlLayer.addListener('mouseout', () => {
-        // 마우스가 폴리곤에서 벗어나면 정보창을 닫습니다.
-        infoWindow.close();
-      });
-      // --------------------------
-      
+      loadAndProcessKml();
     }
 
+    // KML 네트워크 링크를 따라가 최종 데이터를 파싱하는 함수
+    async function loadAndProcessKml() {
+      // 1. 첫 번째 KML 파일 (네트워크 링크만 있는 파일) 주소
+      const initialKmlUrl = 'https://raw.githubusercontent.com/aducanumab/aducanumab.github.io/refs/heads/main/map_data.kml';
+      
+      try {
+        // --- 1단계: '바로가기' 파일(첫 번째 KML) 불러오기 ---
+        const initialResponse = await fetch(initialKmlUrl);
+        if (!initialResponse.ok) throw new Error(`초기 KML 로딩 실패: ${initialResponse.statusText}`);
+        const initialKmlText = await initialResponse.text();
+
+        const parser = new DOMParser();
+        const initialKmlDoc = parser.parseFromString(initialKmlText, "application/xml");
+
+        // --- 2단계: 진짜 데이터의 URL 추출하기 ---
+        const kmlNs = 'http://www.opengis.net/kml/2.2';
+        const hrefElem = initialKmlDoc.getElementsByTagNameNS(kmlNs, 'href')[0];
+        if (!hrefElem) throw new Error('KML 파일에서 NetworkLink href를 찾을 수 없습니다.');
+        
+        const finalKmlUrl = hrefElem.textContent; // 진짜 데이터가 있는 최종 URL
+
+        // --- 3단계: 진짜 데이터(두 번째 KML) 불러오기 ---
+        const finalResponse = await fetch(finalKmlUrl);
+        if (!finalResponse.ok) throw new Error(`최종 KML 로딩 실패: ${finalResponse.statusText}`);
+        const finalKmlText = await finalResponse.text();
+
+        // --- 4단계: 최종 데이터를 파싱하여 폴리곤 생성 (이전과 동일) ---
+        const finalKmlDoc = parser.parseFromString(finalKmlText, "application/xml");
+        const placemarks = finalKmlDoc.getElementsByTagNameNS(kmlNs, 'Placemark');
+        
+        const infoWindow = new google.maps.InfoWindow();
+
+        for (let i = 0; i < placemarks.length; i++) {
+          const placemark = placemarks[i];
+          const name = placemark.getElementsByTagNameNS(kmlNs, 'name')[0].textContent;
+          const coordinatesElem = placemark.getElementsByTagNameNS(kmlNs, 'coordinates')[0];
+          
+          if (!coordinatesElem) continue;
+          
+          const coordinatesStr = coordinatesElem.textContent.trim();
+          
+          const path = coordinatesStr.split(/\s+/).map(coordStr => {
+            const [lng, lat] = coordStr.split(',');
+            if (!isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng))) {
+              return { lat: parseFloat(lat), lng: parseFloat(lng) };
+            }
+          }).filter(p => p);
+
+          if (path.length === 0) continue;
+
+          const polygon = new google.maps.Polygon({
+            paths: path,
+            strokeColor: "#FF0000",
+            fillColor: "#FF0000",
+            fillOpacity: 0.35,
+            map: map
+          });
+
+          polygon.addListener('mouseover', (event) => {
+            infoWindow.setContent(`<div>${name}</div>`);
+            infoWindow.setPosition(event.latLng);
+            infoWindow.open(map);
+          });
+
+          polygon.addListener('mouseout', () => {
+            infoWindow.close();
+          });
+        }
+      } catch (error) {
+        console.error('KML 처리 중 오류:', error);
+        alert('지도 데이터를 처리하는 중 문제가 발생했습니다.');
+      }
+    }
+
+    // API 키를 안전하게 불러오는 함수 (이전과 동일)
     async function loadMap() {
-      // Netlify 함수를 통해 안전하게 API 키를 불러오는 부분 (이전과 동일)
       try {
         const response = await fetch('/.netlify/functions/get-api-key');
         const data = await response.json();
         const apiKey = data.apiKey;
 
         const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap&loading=async`;
         script.async = true;
         document.head.appendChild(script);
       } catch (error) {
-        console.error('API 키를 불러오는 데 실패했습니다.', error);
+        console.error('API 키 로딩 실패:', error);
       }
     }
 
