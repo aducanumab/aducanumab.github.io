@@ -132,6 +132,8 @@
             infoWindow.setContent(contentString);
             infoWindow.setPosition(center);
             infoWindow.open(map);
+
+            debugger;
           });
           polygon.addListener('mouseout', () => { infoWindow.close(); });
           const urlMatch = description.match(/https?:\/\/[^\s<]+/);
