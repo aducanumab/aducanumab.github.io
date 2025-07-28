@@ -4,14 +4,55 @@
   <meta charset="UTF-8">
   <title>Final Interactive Map</title>
   <style>
+    /* 웹페이지의 기본 여백을 없애고, 지도가 화면을 꽉 채우도록 설정합니다. */
     html, body, #map { height: 100%; margin: 0; padding: 0; }
+
+    /* --- ↓↓↓ 정보창 스타일 추가 ↓↓↓ --- */
+    /* Google 지도의 기본 정보창 여백(padding)을 제거합니다. */
+    .gm-style-iw-c {
+      padding: 0 !important;
+    }
+    .gm-style-iw-d {
+      overflow: hidden !important; /* 스크롤바가 생기지 않도록 처리 */
+    }
+
+    /* 우리가 직접 만들 정보창 콘텐츠 스타일입니다. */
+    .custom-infowindow-content {
+      font-family: 'Nanum Gothic', sans-serif; /* 나눔고딕 폰트 적용 */
+      font-size: 15px;                          /* 폰트 사이즈 15px */
+      font-weight: bold;                        /* 폰트 굵게 (Bold) */
+      padding: 12px 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* 닫기 버튼 스타일입니다. */
+    .custom-infowindow-content .close-button {
+      margin-left: 15px;
+      cursor: pointer;
+      font-size: 18px;
+    }
+    /* --- ↑↑↑ 여기까지 추가 --- ↑↑↑ */
   </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic&display=swap" rel="stylesheet">
 </head>
 <body>
   <div id="map"></div>
 
   <script>
     let map;
+    // InfoWindow 객체를 전역 변수로 만들어 닫기 함수에서도 접근할 수 있도록 합니다.
+    const infoWindow = new google.maps.InfoWindow();
+
+    // --- ↓↓↓ 닫기 버튼을 위한 함수 추가 ↓↓↓ ---
+    // 커스텀 닫기 버튼(X)을 클릭했을 때 이 함수가 호출됩니다.
+    function closeInfoWindow() {
+      infoWindow.close();
+    }
+    // --- ↑↑↑ 여기까지 추가 --- ↑↑↑
 
     function initMap() {
       const mapCenter = { lat: 37.5665, lng: 126.9780 };
@@ -71,12 +112,11 @@
         }
         
         const placemarks = finalKmlDoc.getElementsByTagNameNS(kmlNs, 'Placemark');
-        const infoWindow = new google.maps.InfoWindow();
 
         for (let i = 0; i < placemarks.length; i++) {
           const placemark = placemarks[i];
           const name = placemark.getElementsByTagNameNS(kmlNs, 'name')[0]?.textContent || '';
-          const descriptionHtml = placemark.getElementsByTagNameNS(kmlNs, 'description')[0]?.textContent || '';
+          const description = placemark.getElementsByTagNameNS(kmlNs, 'description')[0]?.textContent || '';
           const styleUrl = placemark.getElementsByTagNameNS(kmlNs, 'styleUrl')[0]?.textContent || '';
           const coordinatesElem = placemark.getElementsByTagNameNS(kmlNs, 'coordinates')[0];
           
@@ -107,14 +147,18 @@
           }
           
           const polygon = new google.maps.Polygon(polygonOptions);
-
-          // 폴리곤의 중심 좌표를 미리 계산합니다.
           const center = getPolygonCenter(path);
 
-          // ### 마우스 오버 기능 수정 ###
           polygon.addListener('mouseover', () => {
-            infoWindow.setContent(`<div>${name}</div>`);
-            // 정보창의 위치를 마우스 커서가 아닌 폴리곤의 중심점으로 설정합니다.
+            // --- ↓↓↓ 정보창 내용(HTML) 수정 ↓↓↓ ---
+            const contentString = `
+              <div class="custom-infowindow-content">
+                <span>${name}</span>
+                <span class="close-button" onclick="closeInfoWindow()">×</span>
+              </div>
+            `;
+            infoWindow.setContent(contentString);
+            // --- ↑↑↑ 여기까지 수정 --- ↑↑↑
             infoWindow.setPosition(center);
             infoWindow.open(map);
           });
@@ -122,19 +166,12 @@
           polygon.addListener('mouseout', () => {
             infoWindow.close();
           });
-
-          // ### 클릭 기능 수정 ###
-          // 설명(description)에 포함된 HTML을 직접 파싱하여 링크(a 태그)를 찾습니다.
-          if (descriptionHtml) {
-            const descDoc = new DOMParser().parseFromString(descriptionHtml, 'text/html');
-            const link = descDoc.querySelector('a'); // a 태그를 찾습니다.
-            
-            // a 태그와 그 안의 href 속성이 존재하면 클릭 이벤트를 추가합니다.
-            if (link && link.href) {
-              polygon.addListener('click', () => {
-                window.location.href = link.href;
-              });
-            }
+          
+          const urlMatch = description.match(/https?:\/\/[^\s<]+/);
+          if (urlMatch && urlMatch[0]) {
+            polygon.addListener('click', () => {
+              window.location.href = urlMatch[0];
+            });
           }
         }
       } catch (error) {
