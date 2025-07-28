@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>click available</title>
+  <title>mouse over console</title>
   <style>
     html, body, #map { height: 100%; margin: 0; padding: 0; }
   </style>
@@ -64,6 +64,9 @@
       
       // 2. KML 레이어에 'mouseover' 이벤트 리스너를 추가합니다.
       kmlLayer.addListener('mouseover', (kmlEvent) => {
+
+        console.log(kmlEvent.featureData);
+        
         // 마우스 커서의 위치와 폴리곤의 정보를 가져옵니다.
         const latLng = kmlEvent.latLng;
         const featureData = kmlEvent.featureData;
@@ -75,7 +78,6 @@
         // 정보창을 지도에 표시합니다.
         infoWindow.open(map);
 
-        console.log(kmlEvent.featureData);
       });
       
       // 3. KML 레이어에 'mouseout' 이벤트 리스너를 추가합니다.
